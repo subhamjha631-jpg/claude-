@@ -21,7 +21,39 @@ mispricings across the two platforms.
 4. Computes the best cross-platform YES/NO combination and the profit per pair.
 5. Serves a live, auto-refreshing dashboard sorted by profit.
 
-## Run it
+## Option A — Telegram bot (recommended: alerts pushed to your phone)
+
+The bot scans both platforms on a loop and messages you whenever a new or
+improved arbitrage appears. You just tap the links and place the bets. It's
+free and needs no browser tab open.
+
+**One-time setup:**
+
+1. In Telegram, message **@BotFather**, send `/newbot`, follow the prompts. It
+   gives you a token like `123456:ABC-DEF...`.
+2. Send any message (e.g. "hi") to your new bot.
+3. Get your chat id:
+   ```bash
+   pip install -r requirements.txt
+   cd backend
+   TELEGRAM_BOT_TOKEN="123456:ABC-DEF..." python telegram_bot.py --get-chat-id
+   ```
+4. Run the bot:
+   ```bash
+   export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
+   export TELEGRAM_CHAT_ID="<id from step 3>"
+   python telegram_bot.py
+   ```
+
+Leave it running (your PC, a Raspberry Pi, or any free always-on host). Tune
+with env vars: `SCAN_INTERVAL` (seconds, default 120), `MIN_PROFIT` (dollars per
+$1 pair, default 0.02), `MIN_SCORE` (match confidence 0..1, default 0.5).
+
+> Tip: run it with **no** token first (`python telegram_bot.py`) to see the
+> alerts printed to your console — a free way to confirm it works before
+> wiring up Telegram.
+
+## Option B — Web dashboard
 
 ```bash
 pip install -r requirements.txt
