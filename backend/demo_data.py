@@ -29,18 +29,18 @@ def load() -> tuple[list[Market], list[Market]]:
                url="https://polymarket.com/event/spacex-mars-2030"),
     ]
     kalshi = [
-        # Mispriced vs Polymarket p1: NO is cheap here (0.33). Buy YES on
-        # Polymarket @0.62 + NO on Kalshi @0.33 = 0.95 -> 5c locked profit.
+        # Mispriced vs Polymarket p1: NO is cheap here (0.30). Buy YES on
+        # Polymarket @0.62 + NO on Kalshi @0.30 = 0.92 -> high-profit tier.
         Market("Kalshi", "PRES-24-TRUMP", "Donald Trump wins 2024 presidential election",
-               yes_ask=0.68, no_ask=0.33, yes_bid=0.66, volume=4_200_000,
+               yes_ask=0.71, no_ask=0.30, yes_bid=0.66, volume=4_200_000,
                url="https://kalshi.com/markets/PRES-24-TRUMP"),
         Market("Kalshi", "FED-SEP-CUT", "Fed cuts interest rates at September meeting",
                yes_ask=0.51, no_ask=0.52, yes_bid=0.49, volume=700_000,
                url="https://kalshi.com/markets/FED-SEP-CUT"),
-        # Mispriced vs Polymarket p3: YES cheap here (0.26). Buy YES on Kalshi
-        # @0.26 + NO on Polymarket @0.72 = 0.98 -> 2c locked profit.
+        # Mispriced vs Polymarket p3: YES very cheap here (0.15). Buy YES on
+        # Kalshi @0.15 + NO on Polymarket @0.72 = 0.87 -> big-profit tier.
         Market("Kalshi", "BTC-100K-24", "Bitcoin reaches $100,000 during 2024",
-               yes_ask=0.26, no_ask=0.77, yes_bid=0.24, volume=1_500_000,
+               yes_ask=0.15, no_ask=0.86, yes_bid=0.13, volume=1_500_000,
                url="https://kalshi.com/markets/BTC-100K-24"),
         Market("Kalshi", "NBA-CHAMP", "Boston Celtics win the NBA championship",
                yes_ask=0.40, no_ask=0.63, yes_bid=0.38, volume=550_000,

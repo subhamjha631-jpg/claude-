@@ -1,5 +1,5 @@
 """
-Match equivalent markets across platforms and compute arbitrage.
+Match equivalent markets across platforms and compute arbitrage (net of fees).
 
 Matching is the genuinely hard part of cross-platform arbitrage: "Will Trump
 win the 2024 election?" on one site and "2024 Presidential Election Winner:
@@ -11,8 +11,8 @@ because a false match looks like free money but is actually two different bets.
 Arbitrage on a binary event:
   Exactly one of YES / NO pays out $1. If you buy a YES share on platform A for
   `a` dollars and a NO share on platform B for `b` dollars, you are guaranteed
-  to hold exactly one winning $1 share. If a + b < 1 you locked in (1 - a - b)
-  profit per pair, regardless of the outcome.
+  to hold exactly one winning $1 share. If a + b (+ fees) < 1 you locked in the
+  difference as profit, regardless of the outcome.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from dataclasses import dataclass, asdict
 from difflib import SequenceMatcher
 
 from sources import Market
+from fees import leg_fee
 
 STOPWORDS = {
     "the", "a", "an", "will", "be", "is", "are", "to", "of", "in", "on", "for",
@@ -50,6 +51,7 @@ def similarity(a: str, b: str) -> float:
 
 @dataclass
 class Opportunity:
+    # --- the matched event on each platform ---
     question_a: str
     question_b: str
     platform_a: str
@@ -57,46 +59,47 @@ class Opportunity:
     url_a: str
     url_b: str
     match_score: float
-    # The winning strategy:
-    strategy: str          # e.g. "Buy YES on Polymarket + Buy NO on Kalshi"
-    cost_yes: float        # price paid for the YES leg
-    cost_no: float         # price paid for the NO leg
-    total_cost: float      # cost_yes + cost_no (per guaranteed $1 payout)
-    profit_per_pair: float # 1 - total_cost
-    roi_pct: float         # profit / total_cost * 100
+
+    # --- explicit, no-thinking-required trade legs ---
+    yes_platform: str   # where to BUY the YES share
+    yes_price: float
+    yes_url: str
+    no_platform: str    # where to BUY the NO share
+    no_price: float
+    no_url: str
+
+    # --- the money math, per $1 guaranteed payout ---
+    total_cost: float          # yes_price + no_price
+    gross_profit_per_pair: float
+    gross_roi_pct: float
+    fee_per_pair: float        # estimated fees for both legs
+    net_profit_per_pair: float # after fees
+    net_roi_pct: float         # after fees, the number that matters
+
+    # legacy/compat aliases used by the web dashboard
+    strategy: str
+    cost_yes: float
+    cost_no: float
+    profit_per_pair: float     # == net_profit_per_pair
+    roi_pct: float             # == net_roi_pct
 
     def to_dict(self):
         return asdict(self)
 
 
-def _best_arb(m1: Market, m2: Market) -> dict | None:
-    """Best of the two cross-platform YES/NO combinations, if profitable."""
+def _best_arb(m1: Market, m2: Market):
+    """Best of the two cross-platform YES/NO combinations by *gross* edge."""
     candidates = []
-
-    # Combination 1: YES on m1, NO on m2.
     if m1.yes_ask is not None and m2.no_ask is not None:
-        candidates.append(
-            (m1.yes_ask, m2.no_ask, m1, m2, "YES", "NO")
-        )
-    # Combination 2: YES on m2, NO on m1.
+        candidates.append((m1.yes_ask, m1, m2.no_ask, m2))  # YES on m1, NO on m2
     if m2.yes_ask is not None and m1.no_ask is not None:
-        candidates.append(
-            (m2.yes_ask, m1.no_ask, m2, m1, "YES", "NO")
-        )
+        candidates.append((m2.yes_ask, m2, m1.no_ask, m1))  # YES on m2, NO on m1
 
     best = None
-    for cost_yes, cost_no, yes_mkt, no_mkt, _, _ in candidates:
-        total = cost_yes + cost_no
-        profit = 1.0 - total
-        if best is None or profit > best["profit_per_pair"]:
-            best = {
-                "yes_mkt": yes_mkt,
-                "no_mkt": no_mkt,
-                "cost_yes": round(cost_yes, 4),
-                "cost_no": round(cost_no, 4),
-                "total_cost": round(total, 4),
-                "profit_per_pair": round(profit, 4),
-            }
+    for yes_price, yes_mkt, no_price, no_mkt in candidates:
+        total = yes_price + no_price
+        if best is None or total < best[0]:
+            best = (total, yes_price, yes_mkt, no_price, no_mkt)
     return best
 
 
@@ -105,11 +108,12 @@ def find_opportunities(
     markets_b: list[Market],
     min_match_score: float = 0.45,
     min_profit: float = 0.0,
+    polymarket_fee_rate: float = 0.0,
 ) -> list[Opportunity]:
-    """Cross-match two platforms' markets and return profitable arbs.
+    """Cross-match two platforms and return arbs that are profitable AFTER fees.
 
-    `min_profit` is in dollars-per-$1-pair (after no fees). Set it above 0 to
-    leave a margin for platform fees and slippage.
+    `min_profit` is net dollars per $1 pair. Results are sorted by net profit,
+    highest first, so the best opportunities are always at the top.
     """
     opportunities: list[Opportunity] = []
 
@@ -123,15 +127,24 @@ def find_opportunities(
             if score < min_match_score:
                 continue
 
-            arb = _best_arb(m1, m2)
-            if arb is None:
+            best = _best_arb(m1, m2)
+            if best is None:
                 continue
-            if arb["profit_per_pair"] <= min_profit:
+            total, yes_price, yes_mkt, no_price, no_mkt = best
+
+            fee_yes = leg_fee(yes_mkt.platform, yes_price, polymarket_fee_rate)
+            fee_no = leg_fee(no_mkt.platform, no_price, polymarket_fee_rate)
+            fee_total = round(fee_yes + fee_no, 4)
+
+            gross_profit = round(1.0 - total, 4)
+            net_profit = round(1.0 - total - fee_total, 4)
+            if net_profit <= min_profit:
                 continue
 
-            yes_mkt = arb["yes_mkt"]
-            no_mkt = arb["no_mkt"]
-            roi = (arb["profit_per_pair"] / arb["total_cost"] * 100.0) if arb["total_cost"] else 0.0
+            outlay = total + fee_total
+            net_roi = round((net_profit / outlay * 100.0), 2) if outlay else 0.0
+            gross_roi = round((gross_profit / total * 100.0), 2) if total else 0.0
+
             opportunities.append(
                 Opportunity(
                     question_a=m1.question,
@@ -141,17 +154,28 @@ def find_opportunities(
                     url_a=m1.url,
                     url_b=m2.url,
                     match_score=score,
+                    yes_platform=yes_mkt.platform,
+                    yes_price=round(yes_price, 4),
+                    yes_url=yes_mkt.url,
+                    no_platform=no_mkt.platform,
+                    no_price=round(no_price, 4),
+                    no_url=no_mkt.url,
+                    total_cost=round(total, 4),
+                    gross_profit_per_pair=gross_profit,
+                    gross_roi_pct=gross_roi,
+                    fee_per_pair=fee_total,
+                    net_profit_per_pair=net_profit,
+                    net_roi_pct=net_roi,
                     strategy=(
-                        f"Buy YES on {yes_mkt.platform} @ {arb['cost_yes']:.2f} "
-                        f"+ Buy NO on {no_mkt.platform} @ {arb['cost_no']:.2f}"
+                        f"BUY YES on {yes_mkt.platform} @ {yes_price:.2f} "
+                        f"+ BUY NO on {no_mkt.platform} @ {no_price:.2f}"
                     ),
-                    cost_yes=arb["cost_yes"],
-                    cost_no=arb["cost_no"],
-                    total_cost=arb["total_cost"],
-                    profit_per_pair=arb["profit_per_pair"],
-                    roi_pct=round(roi, 2),
+                    cost_yes=round(yes_price, 4),
+                    cost_no=round(no_price, 4),
+                    profit_per_pair=net_profit,
+                    roi_pct=net_roi,
                 )
             )
 
-    opportunities.sort(key=lambda o: o.profit_per_pair, reverse=True)
+    opportunities.sort(key=lambda o: o.net_profit_per_pair, reverse=True)
     return opportunities

@@ -23,35 +23,62 @@ mispricings across the two platforms.
 
 ## Option A — Telegram bot (recommended: alerts pushed to your phone)
 
-The bot scans both platforms on a loop and messages you whenever a new or
-improved arbitrage appears. You just tap the links and place the bets. It's
-free and needs no browser tab open.
+The bot scans both platforms on a loop and messages you whenever an arbitrage
+appears. Every message spells out exactly what to do — no thinking required:
 
-**One-time setup:**
+- It names the event and what it's called on **both** platforms.
+- It tells you which platform to use for each leg, and whether to **BUY YES** or
+  **BUY NO**, and at what price.
+- It shows the cost, the **estimated fees**, the **net profit**, and the
+  **net ROI after fees**, plus a simple "$100 per side → keep ~$X" example.
+- The **biggest profits come first**, and high-profit alerts are repeated so you
+  don't miss them: **≥10% net ROI is sent 3 times, ≥5% is sent 2 times**, smaller
+  ones once.
 
-1. In Telegram, message **@BotFather**, send `/newbot`, follow the prompts. It
-   gives you a token like `123456:ABC-DEF...`.
-2. Send any message (e.g. "hi") to your new bot.
-3. Get your chat id:
+### Simple Telegram setup (plain language)
+
+You need two things: a **bot token** and your **chat id**. Here's how, step by step:
+
+1. **Make the bot.** Open Telegram, search for the user **@BotFather** (it has a
+   blue checkmark), open it, and tap **Start**. Send the message `/newbot`.
+   It will ask for a name (anything, e.g. "My Arb Bot") and a username (must end
+   in `bot`, e.g. `my_arb_alert_bot`). When done, it sends you a **token** that
+   looks like `123456789:ABCdefGhIJKlmnoPQRstuVWxyz`. Copy it — that's your
+   `TELEGRAM_BOT_TOKEN`.
+2. **Say hi to your bot.** Tap the link BotFather gives you to open your new bot,
+   tap **Start**, and send it any message like `hi`. (This lets the bot message
+   you back.)
+3. **Get your chat id.** On your computer, run:
    ```bash
    pip install -r requirements.txt
    cd backend
-   TELEGRAM_BOT_TOKEN="123456:ABC-DEF..." python telegram_bot.py --get-chat-id
+   TELEGRAM_BOT_TOKEN="paste-your-token-here" python telegram_bot.py --get-chat-id
    ```
-4. Run the bot:
+   It prints a number like `7654321` — that's your `TELEGRAM_CHAT_ID`.
+4. **Start the bot.** Run:
    ```bash
-   export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
-   export TELEGRAM_CHAT_ID="<id from step 3>"
+   export TELEGRAM_BOT_TOKEN="paste-your-token-here"
+   export TELEGRAM_CHAT_ID="paste-your-chat-id-here"
    python telegram_bot.py
    ```
+   You'll get a "bot started" message in Telegram, then alerts as they appear.
+   Leave this running (your PC, a Raspberry Pi, or any free always-on host like
+   a free-tier VM). That's it.
 
-Leave it running (your PC, a Raspberry Pi, or any free always-on host). Tune
-with env vars: `SCAN_INTERVAL` (seconds, default 120), `MIN_PROFIT` (dollars per
-$1 pair, default 0.02), `MIN_SCORE` (match confidence 0..1, default 0.5).
+> Tip: run it with **no** token first (just `python telegram_bot.py`) to see the
+> alerts printed in your console — a free way to confirm it works before wiring
+> up Telegram.
 
-> Tip: run it with **no** token first (`python telegram_bot.py`) to see the
-> alerts printed to your console — a free way to confirm it works before
-> wiring up Telegram.
+**Tuning** (optional, all set as environment variables before running):
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `SCAN_INTERVAL` | seconds between scans | 120 |
+| `MIN_PROFIT` | minimum **net** profit per $1 pair to alert | 0.01 |
+| `MIN_SCORE` | event-match confidence (0–1) | 0.5 |
+| `POLYMARKET_FEE_RATE` | Polymarket fee as a fraction of notional | 0.0 |
+| `HIGH_ROI_PCT` / `VERY_HIGH_ROI_PCT` | net ROI % for 2× / 3× repeats | 5 / 10 |
+| `REPEAT_GAP` | seconds between repeat pings | 20 |
 
 ## Option B — Web dashboard
 
