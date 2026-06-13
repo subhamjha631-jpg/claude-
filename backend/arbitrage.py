@@ -68,6 +68,9 @@ class Opportunity:
     no_price: float
     no_url: str
 
+    # --- liquidity (so you can actually fill your size) ---
+    min_volume: float   # the smaller traded volume of the two legs
+
     # --- the money math, per $1 guaranteed payout ---
     total_cost: float          # yes_price + no_price
     gross_profit_per_pair: float
@@ -109,11 +112,13 @@ def find_opportunities(
     min_match_score: float = 0.45,
     min_profit: float = 0.0,
     polymarket_fee_rate: float = 0.0,
+    min_volume: float = 0.0,
 ) -> list[Opportunity]:
     """Cross-match two platforms and return arbs that are profitable AFTER fees.
 
-    `min_profit` is net dollars per $1 pair. Results are sorted by net profit,
-    highest first, so the best opportunities are always at the top.
+    `min_profit` is net dollars per $1 pair. `min_volume` drops pairs where
+    either market is too thinly traded to fill (uses each platform's reported
+    volume). Results are sorted by net profit, highest first.
     """
     opportunities: list[Opportunity] = []
 
@@ -122,6 +127,9 @@ def find_opportunities(
             continue
         for m2 in markets_b:
             if not m2.question:
+                continue
+            # Liquidity gate: both legs must clear the volume floor.
+            if min_volume > 0 and (m1.volume < min_volume or m2.volume < min_volume):
                 continue
             score = similarity(m1.question, m2.question)
             if score < min_match_score:
@@ -160,6 +168,7 @@ def find_opportunities(
                     no_platform=no_mkt.platform,
                     no_price=round(no_price, 4),
                     no_url=no_mkt.url,
+                    min_volume=round(min(m1.volume, m2.volume), 2),
                     total_cost=round(total, 4),
                     gross_profit_per_pair=gross_profit,
                     gross_roi_pct=gross_roi,

@@ -54,6 +54,7 @@ CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", "120"))
 MIN_SCORE = float(os.environ.get("MIN_SCORE", "0.5"))
 MIN_PROFIT = float(os.environ.get("MIN_PROFIT", "0.01"))
+MIN_VOLUME = float(os.environ.get("MIN_VOLUME", "5000"))
 POLYMARKET_FEE_RATE = float(os.environ.get("POLYMARKET_FEE_RATE", "0.0"))
 HIGH_ROI_PCT = float(os.environ.get("HIGH_ROI_PCT", "5"))
 VERY_HIGH_ROI_PCT = float(os.environ.get("VERY_HIGH_ROI_PCT", "10"))
@@ -156,6 +157,8 @@ def format_alert(o: Opportunity, demo: bool, idx: int, total: int) -> str:
         f"• <b>NET PROFIT: ${o.net_profit_per_pair:.2f}  ➜  +{o.net_roi_pct:.1f}% after fees</b>\n\n"
         f"📊 <b>Example:</b> put ~$100 on each side → keep roughly "
         f"<b>${profit_100:.0f} profit</b>, guaranteed.\n\n"
+        f"💧 Liquidity (smaller side): ~${o.min_volume:,.0f} traded — "
+        f"check the order book covers your size.\n"
         f"🧠 Match confidence {o.match_score:.0%}. Open BOTH links and confirm it's "
         f"the same question with the same end date before betting."
     )
@@ -178,6 +181,7 @@ def scan_once():
         min_match_score=MIN_SCORE,
         min_profit=MIN_PROFIT,
         polymarket_fee_rate=POLYMARKET_FEE_RATE,
+        min_volume=MIN_VOLUME,
     )
     return opps, demo
 
@@ -200,8 +204,8 @@ def main() -> None:
         "✅ <b>Arbitrage bot started.</b>\n"
         f"Scanning Polymarket + Kalshi every {SCAN_INTERVAL}s.\n"
         f"Alerting on NET profit ≥ ${MIN_PROFIT:.2f} per $1 pair "
-        f"(match ≥ {MIN_SCORE:.0%}). Best profits come first; "
-        f"high-profit ones are repeated."
+        f"(match ≥ {MIN_SCORE:.0%}, volume ≥ ${MIN_VOLUME:,.0f}). "
+        f"Best profits come first; high-profit ones are repeated."
     )
 
     # key -> (last_net_profit_alerted, last_alert_time)

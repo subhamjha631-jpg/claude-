@@ -61,12 +61,14 @@ def _refresh(force: bool = False):
 def opportunities(
     min_score: float = Query(0.45, ge=0.0, le=1.0),
     min_profit: float = Query(0.0, ge=-1.0, le=1.0),
+    min_volume: float = Query(0.0, ge=0.0),
     force: bool = Query(False),
 ):
     _refresh(force=force)
     opps = find_opportunities(
         _cache["poly"], _cache["kalshi"],
         min_match_score=min_score, min_profit=min_profit,
+        min_volume=min_volume,
     )
     return JSONResponse({
         "demo": _cache["demo"],

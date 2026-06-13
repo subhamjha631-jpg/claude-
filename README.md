@@ -75,6 +75,7 @@ You need two things: a **bot token** and your **chat id**. Here's how, step by s
 |---|---|---|
 | `SCAN_INTERVAL` | seconds between scans | 120 |
 | `MIN_PROFIT` | minimum **net** profit per $1 pair to alert | 0.01 |
+| `MIN_VOLUME` | skip markets with less than this $ traded (liquidity floor) | 5000 |
 | `MIN_SCORE` | event-match confidence (0–1) | 0.5 |
 | `POLYMARKET_FEE_RATE` | Polymarket fee as a fraction of notional | 0.0 |
 | `HIGH_ROI_PCT` / `VERY_HIGH_ROI_PCT` | net ROI % for 2× / 3× repeats | 5 / 10 |

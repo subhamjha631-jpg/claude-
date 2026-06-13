@@ -59,6 +59,9 @@
     <label>Min profit / $1 pair
       <input id="minProfit" type="number" step="0.01" min="-1" max="1" value="0.00" />
     </label>
+    <label>Min volume ($)
+      <input id="minVolume" type="number" step="1000" min="0" value="0" />
+    </label>
     <label>Auto-refresh (s)
       <input id="refreshSec" type="number" step="5" min="0" value="30" />
     </label>
@@ -74,11 +77,12 @@
         <th>Total cost</th>
         <th>Profit / pair</th>
         <th>ROI</th>
+        <th>Volume</th>
         <th>Match</th>
       </tr>
     </thead>
     <tbody id="rows">
-      <tr><td colspan="6" class="empty">Loading…</td></tr>
+      <tr><td colspan="7" class="empty">Loading…</td></tr>
     </tbody>
   </table>
 
@@ -95,10 +99,11 @@ function fmt(n) { return (n).toFixed(2); }
 async function scan() {
   const minScore = document.getElementById('minScore').value;
   const minProfit = document.getElementById('minProfit').value;
+  const minVolume = document.getElementById('minVolume').value;
   const status = document.getElementById('status');
   status.textContent = 'Scanning…';
   try {
-    const res = await fetch(`/api/opportunities?min_score=${minScore}&min_profit=${minProfit}`);
+    const res = await fetch(`/api/opportunities?min_score=${minScore}&min_profit=${minProfit}&min_volume=${minVolume}`);
     const data = await res.json();
     render(data);
     const when = new Date().toLocaleTimeString();
@@ -112,7 +117,7 @@ async function scan() {
 function render(data) {
   const rows = document.getElementById('rows');
   if (!data.opportunities.length) {
-    rows.innerHTML = '<tr><td colspan="6" class="empty">No arbitrage found at these thresholds. Lower the min match score or min profit, or wait for prices to move.</td></tr>';
+    rows.innerHTML = '<tr><td colspan="7" class="empty">No arbitrage found at these thresholds. Lower the min match score or min profit, or wait for prices to move.</td></tr>';
     return;
   }
   rows.innerHTML = data.opportunities.map(o => `
@@ -127,6 +132,7 @@ function render(data) {
       <td>$${fmt(o.total_cost)}</td>
       <td class="profit">+$${fmt(o.profit_per_pair)}</td>
       <td class="profit">${o.roi_pct.toFixed(1)}%</td>
+      <td class="score">$${Math.round(o.min_volume).toLocaleString()}</td>
       <td class="score">${o.match_score.toFixed(2)}</td>
     </tr>
   `).join('');
