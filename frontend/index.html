@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prediction Market Arbitrage Scanner</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --amber: #d29922;
+    --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .controls {
+    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  .controls label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  .controls input { width: 90px; background: #0d1117; border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 6px 8px; }
+  button { background: var(--accent); color: #0d1117; border: none; border-radius: 6px;
+    padding: 8px 16px; font-weight: 600; cursor: pointer; }
+  button:hover { opacity: 0.9; }
+  .status { font-size: 13px; color: var(--muted); margin-left: auto; }
+  .demo-badge { background: var(--amber); color: #0d1117; padding: 2px 8px;
+    border-radius: 4px; font-size: 12px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { background: #1c2128; color: var(--muted); font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  tr:last-child td { border-bottom: none; }
+  .profit { color: var(--green); font-weight: 700; }
+  .pair { display: flex; flex-direction: column; gap: 3px; }
+  .pair a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .pair a:hover { text-decoration: underline; }
+  .plat { font-size: 11px; color: var(--muted); }
+  .strategy { font-size: 13px; line-height: 1.5; }
+  .score { font-variant-numeric: tabular-nums; }
+  .empty { text-align: center; color: var(--muted); padding: 40px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <h1>Prediction Market Arbitrage Scanner</h1>
+  <div class="sub">Finds the same event priced differently on Polymarket vs Kalshi, where buying YES on one and NO on the other costs less than $1.</div>
+
+  <div class="controls">
+    <label>Min match score
+      <input id="minScore" type="number" step="0.05" min="0" max="1" value="0.45" />
+    </label>
+    <label>Min profit / $1 pair
+      <input id="minProfit" type="number" step="0.01" min="-1" max="1" value="0.00" />
+    </label>
+    <label>Auto-refresh (s)
+      <input id="refreshSec" type="number" step="5" min="0" value="30" />
+    </label>
+    <button id="scanBtn">Scan now</button>
+    <div class="status" id="status">Loading…</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Matched event (both platforms)</th>
+        <th>Strategy</th>
+        <th>Total cost</th>
+        <th>Profit / pair</th>
+        <th>ROI</th>
+        <th>Match</th>
+      </tr>
+    </thead>
+    <tbody id="rows">
+      <tr><td colspan="6" class="empty">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>How to read this:</strong> each row is a real-world event listed on both platforms. "Profit / pair" is the guaranteed dollar profit for every $1-payout pair of contracts you buy, before fees. ROI is profit divided by what you put in.<br />
+    <strong>Before you trade:</strong> (1) click both links and confirm the two markets resolve on <em>exactly</em> the same condition and date — a false match is the #1 way to lose money here; (2) Kalshi charges trading fees and Polymarket has gas/spread costs, so keep "Min profit" above ~0.02–0.03 to stay truly profitable; (3) the displayed price may not fill your whole size — check order-book depth. This tool surfaces candidates; it does not place trades.
+  </div>
+
+<script>
+let timer = null;
+
+function fmt(n) { return (n).toFixed(2); }
+
+async function scan() {
+  const minScore = document.getElementById('minScore').value;
+  const minProfit = document.getElementById('minProfit').value;
+  const status = document.getElementById('status');
+  status.textContent = 'Scanning…';
+  try {
+    const res = await fetch(`/api/opportunities?min_score=${minScore}&min_profit=${minProfit}`);
+    const data = await res.json();
+    render(data);
+    const when = new Date().toLocaleTimeString();
+    const demo = data.demo ? ' <span class="demo-badge">DEMO DATA</span>' : '';
+    status.innerHTML = `${data.count} opportunities · ${data.poly_count} Polymarket / ${data.kalshi_count} Kalshi markets · ${when}${demo}`;
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+function render(data) {
+  const rows = document.getElementById('rows');
+  if (!data.opportunities.length) {
+    rows.innerHTML = '<tr><td colspan="6" class="empty">No arbitrage found at these thresholds. Lower the min match score or min profit, or wait for prices to move.</td></tr>';
+    return;
+  }
+  rows.innerHTML = data.opportunities.map(o => `
+    <tr>
+      <td class="pair">
+        <a href="${o.url_a}" target="_blank">${escapeHtml(o.question_a)}</a>
+        <span class="plat">${o.platform_a}</span>
+        <a href="${o.url_b}" target="_blank">${escapeHtml(o.question_b)}</a>
+        <span class="plat">${o.platform_b}</span>
+      </td>
+      <td class="strategy">${escapeHtml(o.strategy)}</td>
+      <td>$${fmt(o.total_cost)}</td>
+      <td class="profit">+$${fmt(o.profit_per_pair)}</td>
+      <td class="profit">${o.roi_pct.toFixed(1)}%</td>
+      <td class="score">${o.match_score.toFixed(2)}</td>
+    </tr>
+  `).join('');
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function setupAutoRefresh() {
+  if (timer) clearInterval(timer);
+  const sec = parseInt(document.getElementById('refreshSec').value, 10);
+  if (sec > 0) timer = setInterval(scan, sec * 1000);
+}
+
+document.getElementById('scanBtn').addEventListener('click', scan);
+document.getElementById('refreshSec').addEventListener('change', setupAutoRefresh);
+scan();
+setupAutoRefresh();
+</script>
+</body>
+</html>
